@@ -13,42 +13,7 @@ from tempfile import TemporaryDirectory
 
 if __name__ == '__main__':
 
-    cudnn.benchmark = True
-    plt.ion()
-
-    data_transforms = {
-        'train': transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ]),
-        'val': transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ]),
-    }
-
-    data_dir = 'data/dataset'
-
-    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-                                              data_transforms[x])
-                      for x in ['train', 'val']}
-
-    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-                                                  shuffle=True, num_workers=4)
-                   for x in ['train', 'val']}
-
-    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
-
-    class_names = image_datasets['train'].classes
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-    def imshow(inp, title=None):
+    def image_show(inp, title=None):
         """Display image for Tensor."""
         inp = inp.numpy().transpose((1, 2, 0))
         mean = np.array([0.485, 0.456, 0.406])
@@ -61,13 +26,11 @@ if __name__ == '__main__':
         plt.pause(0.001)  # pause a bit so that plots are updated
 
 
-    # Get a batch of training data
-    inputs, classes = next(iter(dataloaders['train']))
+    train_losses = []
+    validation_losses = []
 
-    # Make a grid from batch
-    out = torchvision.utils.make_grid(inputs)
-
-    imshow(out, title=[class_names[x] for x in classes])
+    train_acc = []
+    validation_acc = []
 
 
     def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
@@ -89,7 +52,7 @@ if __name__ == '__main__':
                     if phase == 'train':
                         model.train()  # Set model to training mode
                     else:
-                        model.eval()   # Set model to evaluate mode
+                        model.eval()  # Set model to evaluate mode
 
                     running_loss = 0.0
                     running_corrects = 0
@@ -125,6 +88,13 @@ if __name__ == '__main__':
 
                     print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
+                    if phase == 'train':
+                        train_losses.append(epoch_loss)
+                        train_acc.append(epoch_acc.item())
+                    else:
+                        validation_losses.append(epoch_loss)
+                        validation_acc.append(epoch_acc.item())
+
                     # deep copy the model
                     if phase == 'val' and epoch_acc > best_acc:
                         best_acc = epoch_acc
@@ -141,36 +111,85 @@ if __name__ == '__main__':
         return model
 
 
-    def visualize_model(model, num_images=20):
+    def validation_show(model, num_images=4):
         was_training = model.training
         model.eval()
-        images_so_far = 0
-        fig = plt.figure()
+#        images_so_far = 0
+#        fig = plt.figure()
 
         with torch.no_grad():
-            for i, (inputs, labels) in enumerate(dataloaders['val']):
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+            inputs, classes = next(iter(dataloaders['train']))
 
-                outputs = model(inputs)
-                _, preds = torch.max(outputs, 1)
+            outputs = torchvision.utils.make_grid(inputs)
 
-                for j in range(inputs.size()[0]):
-                    images_so_far += 1
-                    ax = plt.subplot(num_images // 2, 2, images_so_far)
-                    ax.axis('off')
-                    ax.set_title(f'predicted: {class_names[preds[j]]}')
-                    imshow(inputs.cpu().data[j])
+            image_show(outputs, [class_names[x] for x in classes])
 
-                    if images_so_far == num_images:
-                        model.train(mode=was_training)
-                        return
+                # outputs = model(inputs)
+                # _, preds = torch.max(outputs, 1)
+                #
+                # for j in range(inputs.size()[0]):
+                #     images_so_far += 1
+                #     ax = plt.subplot(num_images // 2, 2, images_so_far)
+                #     ax.axis('off')
+                #     ax.set_title(f'predicted: {class_names[preds[j]]}')
+                #     image_show(inputs.cpu().data[j])
+                #
+                #     if images_so_far == num_images:
+                #         model.train(mode=was_training)
+                #         return
             model.train(mode=was_training)
 
 
+    def plot_show(train, val, title):
+        plt.title(title)
+        plt.plot(train, label='train')
+        plt.plot(val, label='val')
+        plt.legend()
+        plt.show()
+
+
+    data_transforms = {
+        'train': transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        'val': transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+    }
+
+    data_dir = 'data/dataset'
+
+    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
+                                              data_transforms[x])
+                      for x in ['train', 'val']}
+
+    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
+                                                  shuffle=True, num_workers=4)
+                   for x in ['train', 'val']}
+
+    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
+
+    class_names = image_datasets['train'].classes
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Get a batch of training data
+    inputs, classes = next(iter(dataloaders['train']))
+
+    # Make a grid from batch
+    out = torchvision.utils.make_grid(inputs)
+
+    image_show(out, title=[class_names[x] for x in classes])
+
     model_conv = models.resnet18(weights='IMAGENET1K_V1')
-    for param in model_conv.parameters():
-        param.requires_grad = False
+#    for param in model_conv.parameters():
+#        param.requires_grad = False
 
     num_ftrs = model_conv.fc.in_features
 
@@ -189,7 +208,9 @@ if __name__ == '__main__':
     model_conv = train_model(model_conv, criterion, optimizer_ft, exp_lr_scheduler,
                              num_epochs=25)
 
-    visualize_model(model_conv)
+    plot_show(train_losses, validation_losses, 'losses')
 
-    plt.ioff()
+    plot_show(train_acc, validation_acc, 'accuracy')
+
+    validation_show(model_conv)
     plt.show()
